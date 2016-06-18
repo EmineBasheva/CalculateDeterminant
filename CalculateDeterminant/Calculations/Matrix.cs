@@ -2,9 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Calculations
 {
@@ -73,24 +71,7 @@ namespace Calculations
             #endregion set content
         }
         #endregion Constructors
-
-        public override bool Equals(object obj)
-        {
-            var other = obj as Matrix;
-            if (other == null || other.Size != this.Size) return false;
-
-            for (int i = 0; i < this.Size; i++)
-            {
-                for (int j = 0; j < this.Size; j++)
-                {
-                    if (this.Content[i][j] != other.Content[i][j])
-                        return false;
-                }
-            }
-
-            return true;
-        }
-
+        
         #region Print
         public void PrintShort()
         {
