@@ -23,10 +23,11 @@ namespace Calculations
         public void ThreadPoolCallback(Object threadContext)
         {
             int threadIndex = (int)threadContext;
-            Console.WriteLine("thread {0} started...", threadIndex);
+            if (!Matrix.IsQuiet)
+                Console.WriteLine("thread {0} started...", threadIndex);
             this.Product = this.Coeficient * this.SubMatrix.GetDeterminant();
-            //_fibOfN = Calculate(_n);
-            Console.WriteLine("thread {0} result calculated...", threadIndex);
+            if (!Matrix.IsQuiet)
+                Console.WriteLine("thread {0} result calculated...", threadIndex);
             DoneEvent.Set();
         }
     }

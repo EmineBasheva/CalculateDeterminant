@@ -10,18 +10,21 @@ namespace Calculations
 {
     public class Matrix
     {
+        public static bool IsQuiet;
         public int Size { get; set; }
         public double Determinant { get; set; }
 
-        private double[][] content;
+        public double[][] Content;
         private Random rand;
+        private static List<ChunkDeterminant> uniqueChunks = new List<ChunkDeterminant>();
 
+        #region Constructors
         public Matrix(int size)
         {
             rand = new Random();
             this.Size = size;
-            this.content = new double[Size][];
-            this.content = this.content
+            this.Content = new double[Size][];
+            this.Content = this.Content
                 .Select(row => new double[Size])
                 .Select(row => row
                     .Select(item => rand.NextDouble())
@@ -32,11 +35,11 @@ namespace Calculations
         public Matrix(int size, double[][] content)
         {
             this.Size = size;
-            this.content = content;
+            this.Content = content;
         }
 
         /// <summary>
-        /// The file content looks like this:
+        /// The file Content looks like this:
         /// n
         /// a11 a12 a13 … a1n
         /// a21 a22 a23 … a2n
@@ -46,7 +49,7 @@ namespace Calculations
         /// <param name="fileName">Text file name</param>
         public Matrix(string fileName)
         {
-            this.content = new double[Size][];
+            this.Content = new double[Size][];
             string[] lines = File.ReadAllLines(fileName);
 
             #region set size
@@ -60,7 +63,7 @@ namespace Calculations
 
             var strContent = lines.Skip(1);
 
-            this.content = strContent
+            this.Content = strContent
                 .Select(line => line.Split(' ')
                     .Where(item => !string.IsNullOrEmpty(item))
                     .Select(strItem => Convert.ToDouble(strItem))
@@ -69,10 +72,29 @@ namespace Calculations
             
             #endregion set content
         }
-        
+        #endregion Constructors
+
+        public override bool Equals(object obj)
+        {
+            var other = obj as Matrix;
+            if (other == null || other.Size != this.Size) return false;
+
+            for (int i = 0; i < this.Size; i++)
+            {
+                for (int j = 0; j < this.Size; j++)
+                {
+                    if (this.Content[i][j] != other.Content[i][j])
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        #region Print
         public void PrintShort()
         {
-            foreach (var line in this.content)
+            foreach (var line in this.Content)
             {
                 foreach (var item in line)
                 {
@@ -85,7 +107,7 @@ namespace Calculations
 
         public void PrintLong()
         {
-            foreach (var line in this.content)
+            foreach (var line in this.Content)
             {
                 foreach (var item in line)
                 {
@@ -95,13 +117,16 @@ namespace Calculations
             }
             Console.WriteLine("size is {0}.\n", Size);
         }
+        #endregion Print
+
+        #region Calculate determinant
 
         public double GetDeterminant()
         {
             if (this.Size == 2)
             {
-                var result = this.content[0][0] * this.content[1][1]
-                    - this.content[0][1] * this.content[1][0];
+                var result = this.Content[0][0] * this.Content[1][1]
+                    - this.Content[0][1] * this.Content[1][0];
                 return result;
             }
             var adjugateMatrix = 0d;
@@ -110,7 +135,8 @@ namespace Calculations
             {
                 adjugateMatrix += _adjugateMatrix.Coeficient * _adjugateMatrix.SubMatrix.GetDeterminant();
             }
-            //Console.WriteLine("Determinant of submatrix {0}x{1} = {2}", this.Size, this.Size, adjugateMatrix);
+            if (this.Size > 8 && !IsQuiet)
+                Console.WriteLine("Determinant of submatrix {0}x{1} = {2}", this.Size, this.Size, adjugateMatrix);
             return adjugateMatrix;
         }
 
@@ -122,9 +148,9 @@ namespace Calculations
         /// <returns>The coecifient before adjugate matrix and adjugate matrix</returns>
         public ChunkDeterminant GetAdjugateMatrix(int i, int j)
         {
-            var coeficient = this.content[i][j] * Math.Pow(-1, i + j + 2);
-            var newContent = this.content
-                .Where(row => row != this.content[i])
+            var coeficient = this.Content[i][j] * Math.Pow(-1, i + j + 2);
+            var newContent = this.Content
+                .Where(row => row != this.Content[i])
                 .Select(row => row
                     .Where((item, index) => index != j)
                     .ToArray()
@@ -150,26 +176,24 @@ namespace Calculations
             }
             return result;
         }
-
-        /// <summary>
-        /// Wrapper method for use with thread pool
-        /// </summary>
-        /// <param name="threadContext"></param>
-        //public void ThreadPoolCallback(Object threadContext)
-        //{
-        //    int threadIndex = (int)threadContext;
-        //    Console.WriteLine("thread {0} started...", threadIndex);
-        //    //_fibOfN = Calculate(_n);
-        //    Console.WriteLine("thread {0} result calculated...", threadIndex);
-        //    _doneEvent.Set();
-        //}
+        
+        private List<ChunkDeterminant> GetAllSubChuncks()
+        {
+            var allAdjugateMatrixes = GetAllAdjugateMatrixes();
+            var allSubAdjugateMatrixes = allAdjugateMatrixes
+                .SelectMany(chunk => chunk.SubMatrix.GetAllAdjugateMatrixes()
+                    .Select(subChunk =>
+                        new ChunkDeterminant(subChunk.Coeficient * chunk.Coeficient,
+                            subChunk.SubMatrix))
+                    ).ToList();
+            return allSubAdjugateMatrixes;
+        }
 
         public void CalculateDeterminantWithThreads(int numberOfThreads)
         {
-            var allAdjugateMatrixes = GetAllAdjugateMatrixes();
-            var sizeOfDoneEvents = Math.Min(numberOfThreads, allAdjugateMatrixes.Count);
-            var doneEvents = new ManualResetEvent[sizeOfDoneEvents];
-            var chunksOfDeterminant = new ChunkDeterminant [this.Size];
+            var allAdjugateMatrixes = GetAllSubChuncks().ToArray();
+            var sizeOfDoneEvents = Math.Min(numberOfThreads, allAdjugateMatrixes.Length);
+            var doneEvents = new List<ManualResetEvent>(); 
             int counter = 0;
             var finished = false;
 
@@ -179,29 +203,30 @@ namespace Calculations
             {
                 for (int i = 0; i < numberOfThreads && !finished; i++)
                 {
-                    if (!allAdjugateMatrixes.Any())
+                    if (i + counter >= allAdjugateMatrixes.Length)
                     {
                         finished = true;
                         break;
                     }
-                    doneEvents[i] = new ManualResetEvent(false);
-                    var firstAllAdjugateMatrix = allAdjugateMatrixes.First();
-                    allAdjugateMatrixes = allAdjugateMatrixes.Skip(1).ToList();
+                    var newManualResetEven = new ManualResetEvent(false);
+                    doneEvents.Add(newManualResetEven);
 
-                    firstAllAdjugateMatrix.DoneEvent = doneEvents[i];
-                    chunksOfDeterminant[counter] = firstAllAdjugateMatrix;
+                    allAdjugateMatrixes[i + counter].DoneEvent = newManualResetEven;
 
-                    ThreadPool.QueueUserWorkItem(firstAllAdjugateMatrix.ThreadPoolCallback, i);
+                    ThreadPool.QueueUserWorkItem(allAdjugateMatrixes[i + counter].ThreadPoolCallback, i);
                     counter++;
                 }
-                WaitHandle.WaitAll(doneEvents);
+                WaitHandle.WaitAll(doneEvents.ToArray());
             }
-            Console.WriteLine("All calculations are complete.");
+            if (!IsQuiet)
+                Console.WriteLine("All calculations are complete.");
 
-            foreach (var chunk in chunksOfDeterminant.Where(ch => ch != null))
+            foreach (var chunk in allAdjugateMatrixes.Where(ch => ch != null))
             {
                 this.Determinant += chunk.Product;
             }
         }
+
+        #endregion Calculate determinant
     }
 }
