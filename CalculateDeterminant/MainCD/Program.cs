@@ -11,16 +11,23 @@ namespace MainCD
     {
         static void Main(string[] args)
         {
+            // Start count time
             DateTime dt = DateTime.Now;
             TimeSpan before = dt.TimeOfDay;
-            //Console.WriteLine(before);
-            Matrix myMatrix = new Matrix("../../../matrix4x4.txt");
-            var bla = myMatrix.GetDeterminant();
-            //Console.WriteLine(bla);
 
-            Matrix m = new Matrix(10);
-            var det = m.GetDeterminant();
+
+            //Console.WriteLine(before);
+            //Matrix myMatrix = new Matrix("../../../matrix10x10.txt");
+            //myMatrix.CalculateDeterminantWithThreads(11);
+            //Console.WriteLine("\nDeterminant = {0}\n", myMatrix.Determinant);
+
+            Matrix m = new Matrix(15);
+            m.CalculateDeterminantWithThreads(15);
+            Console.WriteLine("\nDeterminant = {0}\n", m.Determinant);
+            //var det = m.GetDeterminant();
             //m.PrintLong();
+
+            // Finish count time
             DateTime dt2 = DateTime.Now;
             TimeSpan after = dt2.TimeOfDay;
             TimeSpan executingTime = after - before;

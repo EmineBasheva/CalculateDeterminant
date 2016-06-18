@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Calculations
@@ -10,6 +11,8 @@ namespace Calculations
     public class Matrix
     {
         public int Size { get; set; }
+        public double Determinant { get; set; }
+
         private double[][] content;
         private Random rand;
 
@@ -105,9 +108,9 @@ namespace Calculations
             var allAdjugateMatrixes = GetAllAdjugateMatrixes();
             foreach (var _adjugateMatrix in allAdjugateMatrixes)
             {
-                adjugateMatrix += _adjugateMatrix.Item1 * _adjugateMatrix.Item2.GetDeterminant();
+                adjugateMatrix += _adjugateMatrix.Coeficient * _adjugateMatrix.SubMatrix.GetDeterminant();
             }
-
+            //Console.WriteLine("Determinant of submatrix {0}x{1} = {2}", this.Size, this.Size, adjugateMatrix);
             return adjugateMatrix;
         }
 
@@ -117,7 +120,7 @@ namespace Calculations
         /// <param name="i">i coord</param>
         /// <param name="j">j coord</param>
         /// <returns>The coecifient before adjugate matrix and adjugate matrix</returns>
-        public Tuple<double, Matrix> GetAdjugateMatrix(int i, int j)
+        public ChunkDeterminant GetAdjugateMatrix(int i, int j)
         {
             var coeficient = this.content[i][j] * Math.Pow(-1, i + j + 2);
             var newContent = this.content
@@ -129,25 +132,76 @@ namespace Calculations
 
             var matrix = new Matrix(newContent.Length, newContent);
 
-            return Tuple.Create(coeficient, matrix);
+            return new ChunkDeterminant(coeficient, matrix);
         }
 
         /// <summary>
         /// Gets all adjugate matrix from first row
         /// </summary>
         /// <returns></returns>
-        public List<Tuple<double, Matrix>> GetAllAdjugateMatrixes()
+        public List<ChunkDeterminant> GetAllAdjugateMatrixes()
         {
-            var result = new List<Tuple<double, Matrix>>();
+            var result = new List<ChunkDeterminant>();
             for (int j = 0; j < this.Size; j++)
             {
                 var j_adjugateMatrix = GetAdjugateMatrix(0, j);
-                if (j_adjugateMatrix.Item1 != 0)
+                if (j_adjugateMatrix.Coeficient != 0)
                     result.Add(j_adjugateMatrix);
             }
             return result;
         }
 
+        /// <summary>
+        /// Wrapper method for use with thread pool
+        /// </summary>
+        /// <param name="threadContext"></param>
+        //public void ThreadPoolCallback(Object threadContext)
+        //{
+        //    int threadIndex = (int)threadContext;
+        //    Console.WriteLine("thread {0} started...", threadIndex);
+        //    //_fibOfN = Calculate(_n);
+        //    Console.WriteLine("thread {0} result calculated...", threadIndex);
+        //    _doneEvent.Set();
+        //}
 
+        public void CalculateDeterminantWithThreads(int numberOfThreads)
+        {
+            var allAdjugateMatrixes = GetAllAdjugateMatrixes();
+            var sizeOfDoneEvents = Math.Min(numberOfThreads, allAdjugateMatrixes.Count);
+            var doneEvents = new ManualResetEvent[sizeOfDoneEvents];
+            var chunksOfDeterminant = new ChunkDeterminant [this.Size];
+            int counter = 0;
+            var finished = false;
+
+            // Configure and start threads using ThreadPool.
+            Console.WriteLine("launching {0} tasks...", numberOfThreads);
+            while (counter < this.Size && !finished)
+            {
+                for (int i = 0; i < numberOfThreads && !finished; i++)
+                {
+                    if (!allAdjugateMatrixes.Any())
+                    {
+                        finished = true;
+                        break;
+                    }
+                    doneEvents[i] = new ManualResetEvent(false);
+                    var firstAllAdjugateMatrix = allAdjugateMatrixes.First();
+                    allAdjugateMatrixes = allAdjugateMatrixes.Skip(1).ToList();
+
+                    firstAllAdjugateMatrix.DoneEvent = doneEvents[i];
+                    chunksOfDeterminant[counter] = firstAllAdjugateMatrix;
+
+                    ThreadPool.QueueUserWorkItem(firstAllAdjugateMatrix.ThreadPoolCallback, i);
+                    counter++;
+                }
+                WaitHandle.WaitAll(doneEvents);
+            }
+            Console.WriteLine("All calculations are complete.");
+
+            foreach (var chunk in chunksOfDeterminant.Where(ch => ch != null))
+            {
+                this.Determinant += chunk.Product;
+            }
+        }
     }
 }
